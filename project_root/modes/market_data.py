@@ -1,4 +1,4 @@
-# modes/market_data.py
+# market_data.py
 import time
 import requests
 from typing import Optional
@@ -9,7 +9,6 @@ BINANCE_PRICE_API_URL = "https://api.binance.com/api/v3/ticker/price"
 def get_binance_price(
     symbol: str, max_retries: int = 5, base_delay: float = 0.5
 ) -> float:
-    # mode 1, 3/4
     last_exc: Optional[Exception] = None
 
     for attempt in range(1, max_retries + 1):

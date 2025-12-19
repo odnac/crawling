@@ -28,7 +28,7 @@ from config import (
 from modes.utils_driver import init_driver
 from modes.mm.victoria_balance import get_available_buy_usdt, get_available_sell_qty
 from modes.mm.victoria_trade import place_limit_order
-from modes.mm.victoria_orders import read_open_orders_side, cancel_order_row, OrderRow
+from modes.mm.victoria_orders import read_open_orders_side, cancel_order_row
 from modes.market_data import get_binance_price
 from modes.utils_logging import setup_logger
 from modes.utils_ui import validate_login_or_exit
@@ -229,8 +229,8 @@ class FollowMMEngine:
             f"Adjustment={self._price_adjustment*100:.2f}%"
         )
 
-        prices = self._build_ladder_prices()
-        self._place_ladder_orders(prices)
+        prices = self._calculate_orderbook_levels()
+        self._place_orderbook_orders(prices)
 
         self._last_rebase_ts = _now()
 
@@ -334,12 +334,17 @@ class FollowMMEngine:
         rows = read_open_orders_side(self.driver, self.side)
         need = self.cfg.levels - len(rows)
         if need <= 0:
-            # _remove_excess_orders()
-            return
+            # if
+            if True:
+                return
+            # else
+            else:
+                _remove_excess_orders()
+            # endif
 
         if len(rows) == 0:
-            prices = self._build_ladder_prices()
-            self._place_ladder_orders(prices)
+            prices = self._calculate_orderbook_levels()
+            self._place_orderbook_orders(prices)
             return
 
         if self.side == "ask":
@@ -355,9 +360,9 @@ class FollowMMEngine:
                 for i in range(1, need + 1)
             ]
 
-        self._place_ladder_orders(new_prices)
+        self._place_orderbook_orders(new_prices)
 
-    def _place_ladder_orders(self, prices: List[float]):
+    def _place_orderbook_orders(self, prices: List[float]):
         if not prices:
             return
 
@@ -448,7 +453,7 @@ class FollowMMEngine:
             except (StaleElementReferenceException, WebDriverException):
                 continue
 
-    def _build_ladder_prices(self) -> List[float]:
+    def _calculate_orderbook_levels(self) -> List[float]:
         assert self._anchor_price is not None
         assert self._price_adjustment is not None
 

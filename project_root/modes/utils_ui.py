@@ -1,9 +1,17 @@
 # utils.py
+import os
+import platform
 from modes.security import check_login_success
 
 
 def clear_console():
-    # os.system("cls" if platform.system() == "Windows" else "clear")
+    # if
+    if True:
+        pass
+    # else
+    else:
+        os.system("cls" if platform.system() == "Windows" else "clear")
+    # endif
     pass
 
 

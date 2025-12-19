@@ -47,11 +47,6 @@ def _infer_side_from_type_text(type_text: str) -> Side:
 
 
 def read_open_orders_side(driver, side: Side, timeout: int = 10) -> List[OrderRow]:
-    """
-    - 행(row) 기준으로 파싱
-    - type 컬럼(buy/sell)로 side 판단
-    - price 컬럼에서 가격 파싱
-    """
     WebDriverWait(driver, timeout).until(EC.presence_of_element_located(TBODY))
     rows = driver.find_elements(*ROWS)
 

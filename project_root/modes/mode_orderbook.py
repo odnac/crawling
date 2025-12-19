@@ -57,7 +57,6 @@ def _fetch_victoria_orderbook_snapshot(driver):
     ticker_text = driver.find_element(By.CSS_SELECTOR, "span.unit").text.strip()
     coin_ticker = ticker_text.replace("/USDT", "")
 
-    # Return None if data is insufficient (calling code should continue)
     if len(ask_prices) < 10 or len(bid_prices) < 10:
         return None
 

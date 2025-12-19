@@ -40,14 +40,23 @@ def print_binance_referenced_price_mode(VICTORIA_URL: str):
                     time.sleep(1)
                     continue
 
-                # adjustment = random.uniform(ADJUSTMENT_MIN, ADJUSTMENT_MAX)
-                # target_price = binance_price * (1 - adjustment)
+                # if
+                if True:
+                    clear_console()
+                    print(
+                        f"[{time.strftime('%H:%M:%S')}] Binance {symbol}={binance_price:.2f}"
+                    )
+                # else
+                else:
+                    adjustment = random.uniform(ADJUSTMENT_MIN, ADJUSTMENT_MAX)
+                    target_price = binance_price * (1 - adjustment)
 
-                clear_console()
-                print(
-                    f"[{time.strftime('%H:%M:%S')}] Binance {symbol}={binance_price:.2f}"
-                    # f"target(-{adjustment*100:.3f}%)={target_price:.2f}"
-                )
+                    clear_console()
+                    print(
+                        f"[{time.strftime('%H:%M:%S')}] Binance {symbol}={binance_price:.2f}"
+                        f"target(-{adjustment*100:.3f}%)={target_price:.2f}"
+                    )
+                # endif
 
                 time.sleep(FOLLOW_UPDATE_SEC)
 

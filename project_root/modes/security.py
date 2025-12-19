@@ -22,7 +22,12 @@ def check_password():
 
 
 def check_login_success(driver) -> bool:
-    if False:
+    # if
+    if True:
+        return True
+
+    # else
+    else:
         try:
             driver.find_element(
                 By.CSS_SELECTOR,
@@ -32,6 +37,4 @@ def check_login_success(driver) -> bool:
 
         except NoSuchElementException:
             return False
-
-    else:
-        return True
+    # endif
