@@ -2,17 +2,17 @@
 import os
 import platform
 from modes.security import check_login_success
+from config import ENABLE_FLAG
 
 
 def clear_console():
     # if
-    if True:
-        pass
+    if ENABLE_FLAG:
+        os.system("cls" if platform.system() == "Windows" else "clear")
     # else
     else:
-        os.system("cls" if platform.system() == "Windows" else "clear")
+        pass
     # endif
-    pass
 
 
 def wait_for_manual_login(mode: int):

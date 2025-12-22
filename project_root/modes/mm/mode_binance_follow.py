@@ -24,6 +24,7 @@ from config import (
     MM_BUY_BUDGET_RATIO,
     MM_SELL_QTY_RATIO,
     MM_TOAST_WAIT_SEC,
+    ENABLE_FLAG,
 )
 from modes.utils_driver import init_driver
 from modes.mm.victoria_balance import get_available_buy_usdt, get_available_sell_qty
@@ -148,11 +149,17 @@ class FollowMMEngine:
                 f"Adjustment={self._price_adjustment*100:.2f}%"
             )
 
+            # if
+            if ENABLE_FLAG:
+                self._remove_excess_orders()
+            # else
+            else:
+                pass
+            # endif
+
             self._place_anchor_order()
             self._fill_ladder_to_target()
-
             self._last_rebase_ts = _now()
-
             self._prev_anchor_price = self._anchor_price
 
         finally:
@@ -335,11 +342,11 @@ class FollowMMEngine:
         need = self.cfg.levels - len(rows)
         if need <= 0:
             # if
-            if True:
-                return
+            if ENABLE_FLAG:
+                self._remove_excess_orders()
             # else
             else:
-                _remove_excess_orders()
+                return
             # endif
 
         if len(rows) == 0:

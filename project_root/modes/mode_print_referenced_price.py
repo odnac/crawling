@@ -1,5 +1,6 @@
 # referenced_mm_mode.py
 import time
+import random
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
@@ -7,7 +8,7 @@ from modes.utils_driver import init_driver
 from modes.utils_ui import clear_console
 from modes.utils_ui import validate_login_or_exit
 from modes.market_data import get_binance_price
-from config import ADJUSTMENT_MIN, ADJUSTMENT_MAX, FOLLOW_UPDATE_SEC
+from config import ADJUSTMENT_MIN, ADJUSTMENT_MAX, FOLLOW_UPDATE_SEC, ENABLE_FLAG
 
 
 def _get_current_binance_symbol_from_victoria(driver) -> str:
@@ -34,20 +35,13 @@ def print_binance_referenced_price_mode(VICTORIA_URL: str):
 
                 try:
                     binance_price = get_binance_price(symbol)
-
                 except Exception as e:
                     print(f"[WARN] Binance API error: {type(e).__name__} - {e}")
                     time.sleep(1)
                     continue
 
                 # if
-                if True:
-                    clear_console()
-                    print(
-                        f"[{time.strftime('%H:%M:%S')}] Binance {symbol}={binance_price:.2f}"
-                    )
-                # else
-                else:
+                if ENABLE_FLAG:
                     adjustment = random.uniform(ADJUSTMENT_MIN, ADJUSTMENT_MAX)
                     target_price = binance_price * (1 - adjustment)
 
@@ -55,6 +49,12 @@ def print_binance_referenced_price_mode(VICTORIA_URL: str):
                     print(
                         f"[{time.strftime('%H:%M:%S')}] Binance {symbol}={binance_price:.2f}"
                         f"target(-{adjustment*100:.3f}%)={target_price:.2f}"
+                    )
+                # else
+                else:
+                    clear_console()
+                    print(
+                        f"[{time.strftime('%H:%M:%S')}] Binance {symbol}={binance_price:.2f}"
                     )
                 # endif
 

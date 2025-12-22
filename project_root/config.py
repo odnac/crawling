@@ -23,6 +23,8 @@ def get_env_int(key: str) -> int:
     return int(value)
 
 
+ENABLE_FLAG = False
+
 ORDERBOOK_REFRESH_INTERVAL = get_env_float("ORDERBOOK_REFRESH_INTERVAL")
 
 ADJUSTMENT_MIN = get_env_float("ADJUSTMENT_MIN")
