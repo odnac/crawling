@@ -95,7 +95,7 @@ def read_open_orders_side(driver, side: Side, timeout: int = 10) -> List[OrderRo
     return out
 
 
-def cancel_order_row(driver, order_row: OrderRow, timeout: int = 10) -> bool:
+def cancel_open_orders_row(driver, order_row: OrderRow, timeout: int = 10) -> bool:
     order_id = order_row.order_id
 
     try:

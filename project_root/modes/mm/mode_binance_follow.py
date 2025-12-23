@@ -27,9 +27,12 @@ from config import (
     ENABLE_FLAG,
 )
 from modes.utils_driver import init_driver
-from modes.mm.victoria_balance import get_available_buy_usdt, get_available_sell_qty
+from modes.mm.victoria_account_balance import (
+    get_available_buy_usdt,
+    get_available_sell_qty,
+)
 from modes.mm.victoria_trade import place_limit_order
-from modes.mm.victoria_orders import read_open_orders_side, cancel_order_row
+from modes.mm.victoria_orders import read_open_orders_side, cancel_open_orders_row
 from modes.market_data import get_binance_price
 from modes.utils_logging import setup_logger
 from modes.utils_ui import validate_login_or_exit
@@ -118,7 +121,7 @@ class FollowMMEngine:
         self._last_topup_ts = 0.0
         self._rebase_lock = False
 
-    def run_forever(self):
+    def run_mm(self):
         self.full_rebalance()
 
         while True:
@@ -452,7 +455,7 @@ class FollowMMEngine:
             if ops >= self.cfg.max_cancel_ops_per_cycle:
                 break
             try:
-                cancel_order_row(
+                cancel_open_orders_row(
                     self.driver, row, timeout=self.cfg.cancel_row_timeout_sec
                 )
                 _maybe_wait_toast(self.cfg)
@@ -495,7 +498,7 @@ def run_follow_mm_bid(victoria_url: str, ticker: str):
         WebDriverWait(driver, 20).until(
             EC.presence_of_element_located((By.ID, "user_base_trans"))
         )
-        FollowMMEngine(driver=driver, side="bid", cfg=cfg, ticker=ticker).run_forever()
+        FollowMMEngine(driver=driver, side="bid", cfg=cfg, ticker=ticker).run_mm()
 
     except KeyboardInterrupt:
         print("\n[INFO] Follow MM BID stopped by user (KeyboardInterrupt)")
@@ -523,7 +526,7 @@ def run_follow_mm_ask(victoria_url: str, ticker: str):
         WebDriverWait(driver, 20).until(
             EC.presence_of_element_located((By.ID, "user_base_coin"))
         )
-        FollowMMEngine(driver=driver, side="ask", cfg=cfg, ticker=ticker).run_forever()
+        FollowMMEngine(driver=driver, side="ask", cfg=cfg, ticker=ticker).run_mm()
 
     except KeyboardInterrupt:
         print("\n[INFO] Follow MM ASK stopped by user (KeyboardInterrupt)")
