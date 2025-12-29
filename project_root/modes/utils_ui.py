@@ -2,12 +2,12 @@
 import os
 import platform
 from modes.security import check_login_success
-from config import ENABLE_FLAG
+from config import FLAG_CLEAR_CONSOLE_ENABLE
 
 
 def clear_console():
     # if
-    if ENABLE_FLAG:
+    if FLAG_CLEAR_CONSOLE_ENABLE:
         os.system("cls" if platform.system() == "Windows" else "clear")
     # else
     else:

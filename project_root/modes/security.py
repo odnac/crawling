@@ -3,7 +3,7 @@ import os
 import getpass
 from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.common.by import By
-from config import ENABLE_FLAG
+from config import FLAG_LOGIN_ENABLE
 
 
 def check_password():
@@ -24,7 +24,7 @@ def check_password():
 
 def check_login_success(driver) -> bool:
     # if
-    if ENABLE_FLAG:
+    if FLAG_LOGIN_ENABLE:
         try:
             driver.find_element(
                 By.CSS_SELECTOR,

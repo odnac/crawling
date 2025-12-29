@@ -23,7 +23,11 @@ def get_env_int(key: str) -> int:
     return int(value)
 
 
-ENABLE_FLAG = False
+FLAG_LOGIN_ENABLE = False
+FLAG_ADJUSTMENT_ENABLE = False
+FLAG_CLEAR_CONSOLE_ENABLE = False
+FLAG_REMOVE_EXCESS_ORDERS_ENABLE = False
+
 
 ORDERBOOK_REFRESH_INTERVAL = get_env_float("ORDERBOOK_REFRESH_INTERVAL")
 

@@ -24,7 +24,8 @@ from config import (
     MM_BUY_BUDGET_RATIO,
     MM_SELL_QTY_RATIO,
     MM_TOAST_WAIT_SEC,
-    ENABLE_FLAG,
+    FLAG_REMOVE_EXCESS_ORDERS_ENABLE,
+    FLAG_ADJUSTMENT_ENABLE,
 )
 from modes.utils_driver import init_driver
 from modes.mm.victoria_account_balance import (
@@ -142,10 +143,15 @@ class FollowMMEngine:
         try:
             symbol = f"{self.ticker.upper()}USDT"
             self._anchor_price = get_binance_price(symbol)
-
-            self._price_adjustment = (
-                random.uniform(ADJUSTMENT_MIN, ADJUSTMENT_MAX) / 100.0
-            )
+            # if
+            if FLAG_ADJUSTMENT_ENABLE:
+                self._price_adjustment = (
+                    random.uniform(ADJUSTMENT_MIN, ADJUSTMENT_MAX) / 100.0
+                )
+            # else
+            else:
+                self._price_adjustment = self._anchor_price
+            # endif
 
             self.logger.info(
                 f"{self.ticker} [FULL REBALANCE] Binance={self._anchor_price:.3f} "
@@ -153,7 +159,7 @@ class FollowMMEngine:
             )
 
             # if
-            if ENABLE_FLAG:
+            if FLAG_REMOVE_EXCESS_ORDERS_ENABLE:
                 self._remove_excess_orders()
             # else
             else:
@@ -163,6 +169,7 @@ class FollowMMEngine:
             self._place_anchor_order()
             self._fill_ladder_to_target()
             self._last_rebase_ts = _now()
+
             self._prev_anchor_price = self._anchor_price
 
         finally:
@@ -207,7 +214,6 @@ class FollowMMEngine:
                     f"({price_change:.3f}, {price_change_percent:.2f}%) → FILL ONLY (ASK bot adjusting)"
                 )
                 self._fill_orderbook_only(new_price)
-
         else:
             if price_change < 0:
                 self.logger.info(
@@ -227,7 +233,6 @@ class FollowMMEngine:
 
     def _fill_orderbook_only(self, binance_price: float):
         self._anchor_price = binance_price
-        self._prev_anchor_price = binance_price
 
         if self._price_adjustment is None:
             self._price_adjustment = (
@@ -243,6 +248,8 @@ class FollowMMEngine:
         self._place_orderbook_orders(prices)
 
         self._last_rebase_ts = _now()
+
+        self._prev_anchor_price = binance_price
 
     def _topup_missing_orders(self):
         if self._anchor_price is None or self._price_adjustment is None:
@@ -261,9 +268,8 @@ class FollowMMEngine:
         retry_count = 0
 
         if self.side == "bid":
-            anchor_price = _normalize_price(
-                self._anchor_price * (1 - self._price_adjustment)
-            )
+            discount = self._price_adjustment
+            anchor_price = _normalize_price(self._anchor_price * (1 - discount))
 
             try:
                 usdt = (
@@ -277,7 +283,7 @@ class FollowMMEngine:
                     self.logger.info(
                         f"{self.ticker} [ANCHOR ORDER] BID "
                         f"price={anchor_price:.3f} qty={qty:.8f} "
-                        f"(Binance: {self._anchor_price:.3f}, Adjustment: {self._price_adjustment*100:.2f}%)"
+                        f"(Binance: {self._anchor_price:.3f}, Discount: {discount*100:.2f}%)"
                     )
 
                     while retry_count < max_retries:
@@ -299,11 +305,9 @@ class FollowMMEngine:
                                 time.sleep(1)
             except Exception as e:
                 self.logger.error(f"Failed to get balance for anchor order: {e}")
-
         else:
-            anchor_price = _normalize_price(
-                self._anchor_price * (1 + self._price_adjustment)
-            )
+            premium = self._price_adjustment
+            anchor_price = _normalize_price(self._anchor_price * (1 + premium))
 
             try:
                 coin = (
@@ -317,7 +321,7 @@ class FollowMMEngine:
                     self.logger.info(
                         f"{self.ticker} [ANCHOR ORDER] ASK "
                         f"price={anchor_price:.3f} qty={qty:.8f} "
-                        f"(Binance: {self._anchor_price:.3f}, premium: {self._price_adjustment*100:.2f}%)"
+                        f"(Binance: {self._anchor_price:.3f}, Premium: {premium*100:.2f}%)"
                     )
 
                     while retry_count < max_retries:
@@ -345,7 +349,7 @@ class FollowMMEngine:
         need = self.cfg.levels - len(rows)
         if need <= 0:
             # if
-            if ENABLE_FLAG:
+            if FLAG_REMOVE_EXCESS_ORDERS_ENABLE:
                 self._remove_excess_orders()
             # else
             else:
@@ -405,7 +409,6 @@ class FollowMMEngine:
                 except Exception as e:
                     self.logger.warning(f"Failed to place ladder order at {price}: {e}")
                     continue
-
         else:
             try:
                 coin = (

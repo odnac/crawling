@@ -8,7 +8,12 @@ from modes.utils_driver import init_driver
 from modes.utils_ui import clear_console
 from modes.utils_ui import validate_login_or_exit
 from modes.market_data import get_binance_price
-from config import ADJUSTMENT_MIN, ADJUSTMENT_MAX, FOLLOW_UPDATE_SEC, ENABLE_FLAG
+from config import (
+    ADJUSTMENT_MIN,
+    ADJUSTMENT_MAX,
+    FOLLOW_UPDATE_SEC,
+    FLAG_ADJUSTMENT_ENABLE,
+)
 
 
 def _get_current_binance_symbol_from_victoria(driver) -> str:
@@ -41,7 +46,7 @@ def print_binance_referenced_price_mode(VICTORIA_URL: str):
                     continue
 
                 # if
-                if ENABLE_FLAG:
+                if FLAG_ADJUSTMENT_ENABLE:
                     adjustment = random.uniform(ADJUSTMENT_MIN, ADJUSTMENT_MAX)
                     target_price = binance_price * (1 - adjustment)
 
