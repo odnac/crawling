@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 CHROME_DRIVER_PATH = os.getenv("CHROME_DRIVER_PATH")
-VICTORIA_URL = os.getenv("VICTORIA_URL")
+VIC_URL = os.getenv("VIC_URL")
 
 
 def get_env_float(key: str) -> float:

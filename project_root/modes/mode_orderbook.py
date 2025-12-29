@@ -31,7 +31,7 @@ def _parse_rows(rows):
     return prices, amounts
 
 
-def _get_victoria_last_price(driver) -> float:
+def _get_vic_last_price(driver) -> float:
     price_text = (
         driver.find_element(
             By.CSS_SELECTOR, "div.overturn-cell.col-price span.contrast"
@@ -42,7 +42,7 @@ def _get_victoria_last_price(driver) -> float:
     return float(price_text)
 
 
-def _fetch_victoria_orderbook_snapshot(driver):
+def _fetch_vic_orderbook_snapshot(driver):
     ask_rows = driver.find_elements(
         By.CSS_SELECTOR, "#mCSB_2_container > a.bidding-table-rows"
     )
@@ -66,7 +66,7 @@ def _fetch_victoria_orderbook_snapshot(driver):
     asks = asks_sorted[-10:]
     bids = bids_sorted[:10]
 
-    last_price = _get_victoria_last_price(driver)
+    last_price = _get_vic_last_price(driver)
 
     return coin_name, coin_ticker, last_price, asks, bids
 
@@ -88,22 +88,22 @@ def _print_orderbook(coin_name, coin_ticker, last_price, asks, bids):
     print("\n└" + "─" * 41 + "┘\n")
 
 
-def run_victoria_orderbook_mode(victoria_url: str):
+def run_vic_orderbook_mode(vic_url: str):
     driver = init_driver()
 
     try:
-        driver.get(f"{victoria_url}/account/login")
+        driver.get(f"{vic_url}/account/login")
 
         validate_login_or_exit(driver=driver, mode=1)
 
-        driver.get(f"{victoria_url}/trade")
+        driver.get(f"{vic_url}/trade")
         WebDriverWait(driver, 20).until(
             EC.presence_of_element_located((By.CSS_SELECTOR, "a.bidding-table-rows"))
         )
 
         while True:
             try:
-                snapshot = _fetch_victoria_orderbook_snapshot(driver)
+                snapshot = _fetch_vic_orderbook_snapshot(driver)
                 if snapshot is None:
                     time.sleep(0.5)
                     continue

@@ -17,14 +17,14 @@ def clear_console():
 
 def wait_for_manual_login(mode: int):
     mode_titles = {
-        1: "Show VictoriaEX Order Book",
+        1: "Show VicEX Order Book",
         2: "Print Binance-Referenced Price Mode Started",
         3: "Follow MM (BID)",
         4: "Follow MM (ASK)",
     }
 
     print("\n" + "=" * 45)
-    print("         💎 Connected to VictoriaEX 💎")
+    print("         💎 Connected to VicEX 💎")
     print("  Press Enter after logging in to continue.")
     print("=" * 45 + "\n")
     input()

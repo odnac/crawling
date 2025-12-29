@@ -31,12 +31,15 @@ from config import (
     MIN_ORDER_USDT,
 )
 from modes.utils_driver import init_driver
-from modes.mm.victoria_account_balance import (
+from project_root.modes.mm.vic_account_balance import (
     get_available_buy_usdt,
     get_available_sell_qty,
 )
-from modes.mm.victoria_trade import place_limit_order
-from modes.mm.victoria_orders import read_open_orders_side, cancel_open_orders_row
+from project_root.modes.mm.vic_trade import place_limit_order
+from project_root.modes.mm.vic_orders import (
+    read_open_orders_side,
+    cancel_open_orders_row,
+)
 from modes.market_data import get_binance_price
 from modes.utils_logging import setup_logger
 from modes.utils_ui import validate_login_or_exit
@@ -121,8 +124,8 @@ def _maybe_wait_toast(cfg: EngineConfig):
         time.sleep(cfg.toast_wait_sec)
 
 
-def _victoria_trade_url(victoria_url: str, ticker: str) -> str:
-    return f"{victoria_url}/trade?code=USDT-{ticker.upper()}"
+def _vic_trade_url(vic_url: str, ticker: str) -> str:
+    return f"{vic_url}/trade?code=USDT-{ticker.upper()}"
 
 
 def read_orderbook(driver, side: Side, timeout: int = 5) -> List[OrderbookLevel]:
@@ -550,14 +553,14 @@ class FollowMMEngine:
         return prices
 
 
-def run_follow_mm_bid(victoria_url: str, ticker: str):
+def run_follow_mm_bid(vic_url: str, ticker: str):
     cfg = _build_cfg()
     driver = init_driver()
 
     try:
-        driver.get(f"{victoria_url}/account/login")
+        driver.get(f"{vic_url}/account/login")
         validate_login_or_exit(driver=driver, mode=3)
-        driver.get(_victoria_trade_url(victoria_url, ticker))
+        driver.get(_vic_trade_url(vic_url, ticker))
         WebDriverWait(driver, 20).until(
             EC.presence_of_element_located((By.ID, "user_base_trans"))
         )
@@ -578,14 +581,14 @@ def run_follow_mm_bid(victoria_url: str, ticker: str):
         print("[INFO] Driver shutdown complete.")
 
 
-def run_follow_mm_ask(victoria_url: str, ticker: str):
+def run_follow_mm_ask(vic_url: str, ticker: str):
     cfg = _build_cfg()
     driver = init_driver()
 
     try:
-        driver.get(f"{victoria_url}/account/login")
+        driver.get(f"{vic_url}/account/login")
         validate_login_or_exit(driver=driver, mode=4)
-        driver.get(_victoria_trade_url(victoria_url, ticker))
+        driver.get(_vic_trade_url(vic_url, ticker))
         WebDriverWait(driver, 20).until(
             EC.presence_of_element_located((By.ID, "user_base_coin"))
         )

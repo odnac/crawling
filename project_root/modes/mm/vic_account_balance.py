@@ -1,4 +1,4 @@
-# victoria_account_balance.py
+# vic_account_balance.py
 from __future__ import annotations
 
 import re

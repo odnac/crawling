@@ -16,27 +16,27 @@ from config import (
 )
 
 
-def _get_current_binance_symbol_from_victoria(driver) -> str:
+def _get_current_binance_symbol_from_vic(driver) -> str:
     unit_text = driver.find_element(By.CSS_SELECTOR, "span.unit").text.strip()
     return unit_text.replace("/", "").upper()
 
 
-def print_binance_referenced_price_mode(VICTORIA_URL: str):
+def print_binance_referenced_price_mode(VIC_URL: str):
     driver = init_driver()
 
     try:
-        driver.get(f"{VICTORIA_URL}/account/login")
+        driver.get(f"{VIC_URL}/account/login")
 
         validate_login_or_exit(driver=driver, mode=2)
 
-        driver.get(f"{VICTORIA_URL}/trade")
+        driver.get(f"{VIC_URL}/trade")
         WebDriverWait(driver, 20).until(
             EC.presence_of_element_located((By.CSS_SELECTOR, "b.pair-title"))
         )
 
         while True:
             try:
-                symbol = _get_current_binance_symbol_from_victoria(driver)
+                symbol = _get_current_binance_symbol_from_vic(driver)
 
                 try:
                     binance_price = get_binance_price(symbol)
