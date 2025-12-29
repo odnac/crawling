@@ -1,12 +1,15 @@
-# utils_logging.py
 import os
 import logging
 from logging.handlers import TimedRotatingFileHandler
 from datetime import datetime
 
 
-def setup_logger(side: str) -> logging.Logger:
-    logger = logging.getLogger(f"FollowMM_{side.upper()}")
+def setup_logger(side: str, ticker: str) -> logging.Logger:
+    side_name = "buy" if side.lower() == "bid" else "sell"
+    ticker_name = ticker.upper()
+
+    logger_name = f"FollowMM_{ticker_name}_{side_name}"
+    logger = logging.getLogger(logger_name)
 
     if logger.handlers:
         return logger
@@ -16,17 +19,17 @@ def setup_logger(side: str) -> logging.Logger:
     log_dir = "logs"
     os.makedirs(log_dir, exist_ok=True)
 
-    log_file = os.path.join(
-        log_dir, f"{side}_{datetime.now().strftime('%Y-%m-%d')}.log"
-    )
+    base_filename = os.path.join(log_dir, f"{side_name}_{ticker_name}.log")
 
     handler = TimedRotatingFileHandler(
-        filename=log_file,
+        filename=base_filename,
         when="midnight",
         interval=1,
         backupCount=0,
         encoding="utf-8",
     )
+
+    handler.suffix = "%Y-%m-%d"
 
     formatter = logging.Formatter(
         "%(asctime)s [%(levelname)s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
