@@ -1,0 +1,24 @@
+# TODO
+0. 미체결주문 즉, 호가창에 걸려있는 주문이 없을 때,
+   read_open_orders_side() 좀 더 수정
+   claude에 기록 있음.
+
+1. 호가창에 물량이 없으면 기준가가 바뀌지 않음   ==> 미끼 체결
+    ex. 80,000 => 90,000
+        [bid] 90,000 - discount 주문을 넣어도 기준가가 안바뀜 호가는 넘어가 있음.
+
+        90,000 => 80,000
+        [ask] 80,000 + premium 주문을 넣어도 기준가가 안바뀜 호가는 넘어가 있음.
+
+    TODO: 호가창에 물량이 있는지 없는지 파악하고,
+          없다면 기준가를 강제로 업데이트 하는 기능 추가 필요
+
+2. 리스크(잔액) 관리 해야함.
+    잔액 확인
+
+3. 매수/매도 주문 시 2개 팝업 뜨는거 처리
+
+
+4. _price_adjustment가 사용안됨.
+    현재 : target_price = _normalize_price(self._anchor_price)
+    의도 : target_price = _normalize_price(self._anchor_price * (1 +- self._price_adjustment))
