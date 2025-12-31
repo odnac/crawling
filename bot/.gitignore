@@ -1,18 +1,22 @@
 .env
 *.env
-
-__pycache__/
-*.pyc
-venv/
 .env.local
 .env.production
 
+
+__pycache__/
+*.pyc
+
+venv/
+.venv/
+
+
 Thumbs.db
 Desktop.ini
+.DS_Store
 
 
 logs/
 *.log
 
-TODO/
-*.txt
+todo
