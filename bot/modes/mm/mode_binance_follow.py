@@ -17,8 +17,8 @@ from config import (
     ADJUSTMENT_MIN,
     ADJUSTMENT_MAX,
     MM_LEVELS,
-    MM_REBASE_INTERVAL_SEC,
-    MM_TOPUP_INTERVAL_SEC,
+    MM_REBALANCE_INTERVAL_SEC,
+    MM_REFILL_INTERVAL_SEC,
     MM_STEP_PERCENT,
     MM_CANCEL_ROW_TIMEOUT_SEC,
     MM_MAX_CANCEL_OPS_PER_CYCLE,
@@ -52,8 +52,8 @@ Side = Literal["bid", "ask"]
 @dataclass(frozen=True)
 class EngineConfig:
     levels: int
-    rebase_interval_sec: int
-    topup_interval_sec: int
+    rebalance_interval_sec: int
+    refill_interval_sec: int
     step_percent: float
     cancel_row_timeout_sec: int
     max_cancel_ops_per_cycle: int
@@ -73,8 +73,8 @@ class OrderbookLevel:
 def _build_cfg() -> EngineConfig:
     return EngineConfig(
         levels=MM_LEVELS,
-        rebase_interval_sec=MM_REBASE_INTERVAL_SEC,
-        topup_interval_sec=MM_TOPUP_INTERVAL_SEC,
+        rebalance_interval_sec=MM_REBALANCE_INTERVAL_SEC,
+        refill_interval_sec=MM_REFILL_INTERVAL_SEC,
         step_percent=MM_STEP_PERCENT,
         cancel_row_timeout_sec=MM_CANCEL_ROW_TIMEOUT_SEC,
         max_cancel_ops_per_cycle=MM_MAX_CANCEL_OPS_PER_CYCLE,
@@ -160,16 +160,16 @@ class FollowMMEngine:
         self._anchor_price: Optional[float] = None
         self._prev_anchor_price: Optional[float] = None
         self._price_adjustment: Optional[float] = None
-        self._last_rebase_ts = 0.0
-        self._last_topup_ts = 0.0
-        self._rebase_lock = False
+        self._last_rebalance_ts = 0.0
+        self._last_refill_ts = 0.0
+        self._rebalance_lock = False
 
     def run_mm(self):
 
         # cancle all open orders
         success, total = cancel_all_open_orders(self.driver)
         self.logger.info(
-            f"{self.ticker} Initial cleanup: {success}/{total} orders cancelled."
+            f"{self.ticker} [Initial cleanup]: {success}/{total} orders cancelled."
         )
 
         # full rebalance
@@ -178,18 +178,18 @@ class FollowMMEngine:
         while True:
             now = _now()
 
-            if now - self._last_rebase_ts >= self.cfg.rebase_interval_sec:
+            if now - self._last_rebalance_ts >= self.cfg.rebalance_interval_sec:
                 self._sync_with_binance()
 
-            if (not self._rebase_lock) and (
-                now - self._last_topup_ts >= self.cfg.topup_interval_sec
+            if (not self._rebalance_lock) and (
+                now - self._last_refill_ts >= self.cfg.refill_interval_sec
             ):
-                self._topup_missing_orders()
+                self._refill_missing_orders()
 
             time.sleep(0.5)
 
     def full_rebalance(self):
-        self._rebase_lock = True
+        self._rebalance_lock = True
         try:
             symbol = f"{self.ticker.upper()}USDT"
             self._anchor_price = get_binance_price(symbol)
@@ -213,14 +213,14 @@ class FollowMMEngine:
             # step 2
             self._set_current_price_and_anchor()
 
-            # step 3: fill orderbook
-            self._fill_ladder_to_target()
+            # step 3: refill orderbook
+            self._refill_ladder_to_target()
 
-            self._last_rebase_ts = _now()
+            self._last_rebalance_ts = _now()
             self._prev_anchor_price = self._anchor_price
 
         finally:
-            self._rebase_lock = False
+            self._rebalance_lock = False
 
     def _set_current_price_and_anchor(self):
         if self._anchor_price is None:
@@ -368,9 +368,9 @@ class FollowMMEngine:
                 self.logger.info(
                     f"{self.ticker} [{reason}] "
                     f"{self._prev_anchor_price:.3f} → {new_price:.3f} "
-                    f"({price_change:.3f}, {price_change_percent:.2f}%) → FILL ONLY"
+                    f"({price_change:.3f}, {price_change_percent:.2f}%) → REFILL ONLY"
                 )
-                self._fill_orderbook_only(new_price)
+                self._refill_orderbook_only(new_price)
         else:
             if price_change < 0:
                 self.logger.info(
@@ -384,11 +384,11 @@ class FollowMMEngine:
                 self.logger.info(
                     f"{self.ticker} [{reason}] "
                     f"{self._prev_anchor_price:.3f} → {new_price:.3f} "
-                    f"(+{price_change:.3f}, +{price_change_percent:.2f}%) → FILL ONLY"
+                    f"(+{price_change:.3f}, +{price_change_percent:.2f}%) → REFILL ONLY"
                 )
-                self._fill_orderbook_only(new_price)
+                self._refill_orderbook_only(new_price)
 
-    def _fill_orderbook_only(self, binance_price: float):
+    def _refill_orderbook_only(self, binance_price: float):
         self._anchor_price = binance_price
         self._prev_anchor_price = self._anchor_price
 
@@ -398,24 +398,24 @@ class FollowMMEngine:
             )
 
         self.logger.info(
-            f"{self.ticker} [FILL ORDERS ONLY] Binance={self._anchor_price:.3f}"
+            f"{self.ticker} [REFILL ORDERS ONLY] Binance={self._anchor_price:.3f}"
         )
 
         prices = self._calculate_orderbook_levels()
         self._place_orderbook_orders(prices)
 
-        self._last_rebase_ts = _now()
+        self._last_rebalance_ts = _now()
 
-    def _topup_missing_orders(self):
+    def _refill_missing_orders(self):
         if self._anchor_price is None or self._price_adjustment is None:
             self.full_rebalance()
             return
 
-        self.logger.info(f"{self.ticker} [TOPUP] Filling missing orders")
-        self._fill_ladder_to_target()
-        self._last_topup_ts = _now()
+        self.logger.info(f"{self.ticker} [REFILL] REFilling missing orders")
+        self._refill_ladder_to_target()
+        self._last_refill_ts = _now()
 
-    def _fill_ladder_to_target(self):
+    def _refill_ladder_to_target(self):
         rows = read_open_orders_side(self.driver, self.side)
         need = self.cfg.levels - len(rows)
 
