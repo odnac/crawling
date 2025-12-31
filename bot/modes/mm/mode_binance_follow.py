@@ -164,13 +164,54 @@ class FollowMMEngine:
         self._last_refill_ts = 0.0
         self._rebalance_lock = False
 
+    def _ensure_clean_start(self):
+        self.logger.info(f"{self.ticker} [INIT] Initializing market maker...")
+        time.sleep(3)  # wait for page loadding
+
+        max_attempts = 3
+        for attempt in range(max_attempts):
+            success, total = cancel_all_open_orders(self.driver)
+            self.logger.info(
+                f"{self.ticker} [Cleanup attempt {attempt+1}]: "
+                f"{success}/{total} orders cancelled."
+            )
+
+            if total == 0:
+                self.logger.info("✅ No orders to cleanup")
+                return
+
+            if success == total:
+                self.logger.info(f"✅ All {total} orders cleaned up successfully")
+                return
+
+            if success > 0:
+                self.logger.warning(
+                    f"⚠️ Partial cleanup: {success}/{total} orders cancelled"
+                )
+
+            if attempt < max_attempts - 1:
+                self.logger.warning("Retrying cleanup in 2 seconds...")
+                time.sleep(2)
+
+        self.logger.error(
+            f"❌ Cleanup failed after {max_attempts} attempts. "
+            "Some orders may still exist!"
+        )
+
     def run_mm(self):
 
-        # cancle all open orders
-        success, total = cancel_all_open_orders(self.driver)
-        self.logger.info(
-            f"{self.ticker} [Initial cleanup]: {success}/{total} orders cancelled."
-        )
+        # all open orders clean
+        self._ensure_clean_start()
+
+        bid_orders = read_open_orders_side(self.driver, "bid")
+        ask_orders = read_open_orders_side(self.driver, "ask")
+
+        if bid_orders or ask_orders:
+            self.logger.error(
+                f"⚠️ CRITICAL: Orders still exist after cleanup! "
+                f"BID: {len(bid_orders)}, ASK: {len(ask_orders)}"
+            )
+            return
 
         # full rebalance
         self.full_rebalance()
@@ -422,8 +463,6 @@ class FollowMMEngine:
         if len(rows) > self.cfg.levels:
             if FLAG_REMOVE_EXCESS_ORDERS_ENABLE:
                 self._remove_excess_orders()
-                return
-            elif len(rows) == self.cfg.levels:
                 return
 
         if len(rows) == 0:

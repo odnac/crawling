@@ -287,35 +287,56 @@ def cancel_open_orders_row(driver, order_row: OrderRow, timeout: int = 15) -> bo
 def _cancel_all_open_orders_side(
     driver, side: Side, timeout: int = 15
 ) -> tuple[int, int]:
-    try:
-        rows = read_open_orders_side(driver, side, timeout=10)
 
-        if not rows:
+    if FLAG_VIC_ORDERS_DEBUGGING_PRINT:
+        print(f"[CANCEL] Starting {side.upper()} orders cancellation...")
+
+    cancelled = 0
+    max_iterations = 50
+
+    for iteration in range(max_iterations):
+        try:
+            rows = read_open_orders_side(driver, side, timeout=10)
+
+            if not rows:
+                if FLAG_VIC_ORDERS_DEBUGGING_PRINT:
+                    if cancelled > 0:
+                        print(
+                            f"[CANCEL] ✅ All {cancelled} {side.upper()} orders cancelled"
+                        )
+                    else:
+                        print(f"[CANCEL] No {side.upper()} orders to cancel")
+                return (cancelled, cancelled)
+
+            first_row = rows[0]
+
             if FLAG_VIC_ORDERS_DEBUGGING_PRINT:
-                print(f"[CANCEL] No {side.upper()} orders to cancel.")
-            return (0, 0)
+                print(
+                    f"[CANCEL] Cancelling {side.upper()} order {cancelled+1} "
+                    f"@ {first_row.price:.3f} (ID: {first_row.order_id})"
+                )
 
-        if FLAG_VIC_ORDERS_DEBUGGING_PRINT:
-            print(f"[CANCEL] Cancelling {len(rows)} {side.upper()} orders...")
+            if cancel_open_orders_row(driver, first_row, timeout=timeout):
+                cancelled += 1
+                time.sleep(0.3)
+            else:
+                time.sleep(0.5)
 
-        cancelled = 0
-        for row in rows:
-            try:
-                if cancel_open_orders_row(driver, row, timeout=timeout):
-                    cancelled += 1
-                    time.sleep(0.3)
-            except Exception as e:
-                print(f"[CANCEL ERROR] Failed to cancel order at {row.price}: {e}")
-                continue
-        if FLAG_VIC_ORDERS_DEBUGGING_PRINT:
-            print(
-                f"[CANCEL] Successfully cancelled {cancelled}/{len(rows)} {side.upper()} orders."
-            )
-        return (cancelled, len(rows))
+        except Exception as e:
+            print(f"[CANCEL ERROR] Error during iteration {iteration}: {e}")
+            time.sleep(0.5)
+            continue
 
-    except Exception as e:
-        print(f"[CANCEL ERROR] Error during _cancel_all_open_orders_side: {e}")
-        return (0, 0)
+    remaining_rows = read_open_orders_side(driver, side, timeout=5)
+    total = cancelled + len(remaining_rows)
+
+    if FLAG_VIC_ORDERS_DEBUGGING_PRINT:
+        print(
+            f"[CANCEL] ⚠️ Max iterations reached. "
+            f"Cancelled {cancelled}/{total} {side.upper()} orders"
+        )
+
+    return (cancelled, total)
 
 
 def cancel_all_open_orders(driver, timeout: int = 15) -> tuple[int, int]:
