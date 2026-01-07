@@ -225,9 +225,13 @@ class FollowMMEngine:
                 self.logger.warning("Retrying cleanup in 2 seconds...")
                 time.sleep(2)
 
-        self.logger.error(
-            f"❌ Cleanup failed after {max_attempts} attempts. "
-            "Some orders may still exist!"
+        self.logger.critical(
+            f"{self.ticker} ❌ CRITICAL ERROR: Cleanup failed after {max_attempts} attempts. "
+            "Some orders may still exist. Program will stop to prevent conflicts."
+        )
+        raise RuntimeError(
+            f"Order cleanup failed for {self.ticker} after {max_attempts} attempts. "
+            "Check logs for details. Program stopped."
         )
 
     def run_mm(self):
