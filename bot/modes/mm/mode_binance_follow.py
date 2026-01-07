@@ -29,6 +29,7 @@ from config import (
     FLAG_ADJUSTMENT_ENABLE,
     ANCHOR_ORDER_BUDGET_RATIO,
     MIN_ORDER_USDT,
+    MM_DISTRIBUTION_MODE,  # NEW: "EQUAL" or "PYRAMID"
 )
 from modes.utils_driver import init_driver
 from modes.mm.vic_account_balance import (
@@ -62,6 +63,8 @@ class EngineConfig:
     toast_wait_sec: float
     anchor_order_budget_ratio: float
     min_order_usdt: float
+    fixed_amount: Optional[float] = None  # NEW: Fixed USDT amount
+    distribution_mode: str = "EQUAL"  # NEW: "EQUAL" or "PYRAMID"
 
 
 @dataclass
@@ -70,7 +73,7 @@ class OrderbookLevel:
     qty: float
 
 
-def _build_cfg() -> EngineConfig:
+def _build_cfg(fixed_amount: Optional[float] = None) -> EngineConfig:
     return EngineConfig(
         levels=MM_LEVELS,
         rebalance_interval_sec=MM_REBALANCE_INTERVAL_SEC,
@@ -83,9 +86,12 @@ def _build_cfg() -> EngineConfig:
         toast_wait_sec=MM_TOAST_WAIT_SEC,
         anchor_order_budget_ratio=ANCHOR_ORDER_BUDGET_RATIO,
         min_order_usdt=MIN_ORDER_USDT,
+        fixed_amount=fixed_amount,  # NEW
+        distribution_mode=MM_DISTRIBUTION_MODE,  # NEW
     )
 
 
+# ... (keep all utility functions as they are)
 def _now() -> float:
     return time.time()
 
@@ -114,6 +120,24 @@ def _weights_pyramid(n: int) -> List[float]:
     raw = list(range(1, n + 1))
     s = sum(raw)
     return [r / s for r in raw]
+
+
+def _weights_equal(n: int) -> List[float]:
+    """
+    Equal distribution: each level gets the same weight
+    """
+    return [1.0 / n for _ in range(n)]
+
+
+def _get_weights(n: int, mode: str) -> List[float]:
+    """
+    Get weight distribution based on mode
+    mode: "EQUAL" or "PYRAMID"
+    """
+    if mode == "EQUAL":
+        return _weights_equal(n)
+    else:  # "PYRAMID"
+        return _weights_pyramid(n)
 
 
 def _sleep_tiny():
@@ -164,9 +188,17 @@ class FollowMMEngine:
         self._last_refill_ts = 0.0
         self._rebalance_lock = False
 
+        # NEW: Log fixed amount mode and distribution mode
+        if cfg.fixed_amount is not None:
+            self.logger.info(
+                f"{self.ticker} [FIXED AMOUNT MODE] Using {cfg.fixed_amount:.2f} USDT per trade"
+            )
+        self.logger.info(f"{self.ticker} [DISTRIBUTION MODE] {cfg.distribution_mode}")
+
+    # ... (keep _ensure_clean_start and run_mm as they are)
     def _ensure_clean_start(self):
         self.logger.info(f"{self.ticker} [INIT] Initializing market maker...")
-        time.sleep(3)  # wait for page loadding
+        time.sleep(3)
 
         max_attempts = 3
         for attempt in range(max_attempts):
@@ -199,8 +231,6 @@ class FollowMMEngine:
         )
 
     def run_mm(self):
-
-        # all open orders clean
         self._ensure_clean_start()
 
         bid_orders = read_open_orders_side(self.driver, "bid")
@@ -213,7 +243,6 @@ class FollowMMEngine:
             )
             return
 
-        # full rebalance
         self.full_rebalance()
 
         while True:
@@ -229,6 +258,7 @@ class FollowMMEngine:
 
             time.sleep(0.5)
 
+    # ... (keep full_rebalance, _set_current_price_and_anchor, etc. mostly unchanged)
     def full_rebalance(self):
         self._rebalance_lock = True
         try:
@@ -247,14 +277,10 @@ class FollowMMEngine:
                 f"Adjustment={self._price_adjustment*100:.2f}%"
             )
 
-            # step 1
             if FLAG_REMOVE_EXCESS_ORDERS_ENABLE:
                 self._remove_excess_orders()
 
-            # step 2
             self._set_current_price_and_anchor()
-
-            # step 3: refill orderbook
             self._refill_ladder_to_target()
 
             self._last_rebalance_ts = _now()
@@ -274,30 +300,25 @@ class FollowMMEngine:
         opp_side = "ask" if is_bid else "bid"
         my_side = "bid" if is_bid else "ask"
 
-        # Step 1: Bait Order
         self.logger.info(
             f"{self.ticker} [BAIT] {opp_side.upper()} {target_price:.3f} qty={bait_qty:.8f}"
         )
         if not self._retry_order(opp_side, target_price, bait_qty, "BAIT"):
             return
 
-        # Step 2: Orderbook Analysis
         time.sleep(0.3)
         blocking_orders = self._get_blocking_orders(opp_side, target_price, is_bid)
 
-        # Step 3: Check balance or qty
         total_sweep_qty = bait_qty + sum(o.qty for o in blocking_orders)
         if not self._check_balance_available(total_sweep_qty, target_price, is_bid):
             return
 
-        # 5. Step 5: Sweep order
         self.logger.info(
             f"{self.ticker} [SWEEP] {my_side.upper()} {total_sweep_qty:.8f} units"
         )
         if not self._retry_order(my_side, target_price, total_sweep_qty, "SWEEP"):
             return
 
-        # 6. Step 6: Anchor order
         self._place_anchor_order(my_side, target_price, is_bid)
         self.logger.info(f"{self.ticker} ✅ Setup complete at {target_price:.3f}")
 
@@ -330,7 +351,14 @@ class FollowMMEngine:
     def _check_balance_available(self, qty, price, is_bid):
         try:
             if is_bid:
-                avail = get_available_buy_usdt(self.driver) * self.cfg.buy_budget_ratio
+                # NEW: Use fixed amount if configured
+                if self.cfg.fixed_amount is not None:
+                    avail = self.cfg.fixed_amount
+                else:
+                    avail = (
+                        get_available_buy_usdt(self.driver) * self.cfg.buy_budget_ratio
+                    )
+
                 needed = qty * price
                 if needed > avail:
                     self.logger.error(
@@ -352,11 +380,15 @@ class FollowMMEngine:
     def _place_anchor_order(self, side, price, is_bid):
         try:
             if is_bid:
-                usdt = (
-                    get_available_buy_usdt(self.driver)
-                    * self.cfg.buy_budget_ratio
-                    * self.cfg.anchor_order_budget_ratio
-                )
+                # NEW: Use fixed amount if configured
+                if self.cfg.fixed_amount is not None:
+                    usdt = self.cfg.fixed_amount * self.cfg.anchor_order_budget_ratio
+                else:
+                    usdt = (
+                        get_available_buy_usdt(self.driver)
+                        * self.cfg.buy_budget_ratio
+                        * self.cfg.anchor_order_budget_ratio
+                    )
                 qty = _normalize_qty(usdt / price)
             else:
                 qty = _normalize_qty(
@@ -373,6 +405,7 @@ class FollowMMEngine:
         except Exception as e:
             self.logger.error(f"Anchor failed: {e}")
 
+    # ... (keep _sync_with_binance, _refill_orderbook_only, etc.)
     def _sync_with_binance(self):
         symbol = f"{self.ticker.upper()}USDT"
 
@@ -443,7 +476,9 @@ class FollowMMEngine:
         )
 
         prices = self._calculate_orderbook_levels()
-        self._place_orderbook_orders(prices)
+        self._place_orderbook_orders(
+            prices, available_budget=None
+        )  # Full rebalance uses total budget
 
         self._last_rebalance_ts = _now()
 
@@ -452,13 +487,12 @@ class FollowMMEngine:
             self.full_rebalance()
             return
 
-        self.logger.info(f"{self.ticker} [REFILL] REFilling missing orders")
+        self.logger.info(f"{self.ticker} [REFILL] Refilling missing orders")
         self._refill_ladder_to_target()
         self._last_refill_ts = _now()
 
     def _refill_ladder_to_target(self):
         rows = read_open_orders_side(self.driver, self.side)
-        need = self.cfg.levels - len(rows)
 
         if len(rows) > self.cfg.levels:
             if FLAG_REMOVE_EXCESS_ORDERS_ENABLE:
@@ -466,10 +500,18 @@ class FollowMMEngine:
                 return
 
         if len(rows) == 0:
+            # Empty orderbook - place all levels
             prices = self._calculate_orderbook_levels()
-            self._place_orderbook_orders(prices)
+            self._place_orderbook_orders(prices, available_budget=None)
             return
 
+        # Calculate how many levels we need to add
+        need = self.cfg.levels - len(rows)
+
+        if need <= 0:
+            return  # Orderbook is full
+
+        # Calculate prices for missing levels
         if self.side == "ask":
             outer = max(r.price for r in rows)
             new_prices = [
@@ -483,24 +525,71 @@ class FollowMMEngine:
                 for i in range(1, need + 1)
             ]
 
-        self._place_orderbook_orders(new_prices)
+        # NEW: Calculate remaining budget
+        remaining_budget = self._calculate_remaining_budget(rows)
 
-    def _place_orderbook_orders(self, prices: List[float]):
+        # Place only the missing levels with remaining budget
+        self._place_orderbook_orders(new_prices, available_budget=remaining_budget)
+
+    def _calculate_remaining_budget(self, existing_rows) -> Optional[float]:
+        """
+        Calculate how much budget is left after accounting for existing orders.
+        Returns None for percentage mode (unlimited budget from balance).
+        """
+        if self.side == "bid":
+            # Calculate total budget for ladder orders
+            if self.cfg.fixed_amount is not None:
+                total_budget = self.cfg.fixed_amount * (
+                    1 - self.cfg.anchor_order_budget_ratio
+                )
+            else:
+                return None  # Percentage mode - use available balance
+
+            # Calculate USDT already used in existing orders
+            used_budget = 0.0
+            for row in existing_rows:
+                used_budget += row.price * row.qty
+
+            remaining = total_budget - used_budget
+
+            self.logger.info(
+                f"{self.ticker} [BUDGET] Total: {total_budget:.2f} USDT, "
+                f"Used: {used_budget:.2f} USDT, Remaining: {remaining:.2f} USDT"
+            )
+
+            return max(0, remaining)
+        else:
+            # For ask side, we don't use budget concept (use coin quantity)
+            return None
+
+    # MODIFIED: _place_orderbook_orders to support fixed amount and remaining budget
+    def _place_orderbook_orders(
+        self, prices: List[float], available_budget: Optional[float] = None
+    ):
         if not prices:
             return
 
         if self.side == "bid":
             try:
-                usdt = (
-                    get_available_buy_usdt(self.driver)
-                    * self.cfg.buy_budget_ratio
-                    * (1 - self.cfg.anchor_order_budget_ratio)
-                )
+                # NEW: Use available_budget if provided (for refill), otherwise calculate total budget
+                if available_budget is not None:
+                    usdt = available_budget
+                elif self.cfg.fixed_amount is not None:
+                    usdt = self.cfg.fixed_amount * (
+                        1 - self.cfg.anchor_order_budget_ratio
+                    )
+                else:
+                    usdt = (
+                        get_available_buy_usdt(self.driver)
+                        * self.cfg.buy_budget_ratio
+                        * (1 - self.cfg.anchor_order_budget_ratio)
+                    )
             except Exception as e:
                 self.logger.error(f"Failed to get USDT balance: {e}")
                 return
 
-            weights = _weights_pyramid(len(prices))
+            # NEW: Use distribution mode from config
+            weights = _get_weights(len(prices), self.cfg.distribution_mode)
 
             for price, w in zip(prices, weights):
                 budget = usdt * w
@@ -510,7 +599,7 @@ class FollowMMEngine:
                 usdt_value = price * qty
                 self.logger.info(
                     f"{self.ticker} [LADDER] {self.side.upper()} "
-                    f"price={price:.3f} qty={qty:.8f} ≈{usdt_value:,.0f}usdt"
+                    f"price={price:.3f} qty={qty:.8f} ≈{usdt_value:,.0f}usdt ({self.cfg.distribution_mode})"
                 )
                 try:
                     place_limit_order(self.driver, "bid", price, qty)
@@ -520,16 +609,34 @@ class FollowMMEngine:
                     continue
         else:
             try:
-                coin = (
-                    get_available_sell_qty(self.driver)
-                    * self.cfg.sell_qty_ratio
-                    * (1 - self.cfg.anchor_order_budget_ratio)
-                )
+                # For ask side - calculate remaining coin quantity
+                if available_budget is not None:
+                    # This is a refill - need to calculate remaining coin from existing orders
+                    rows = read_open_orders_side(self.driver, "ask")
+                    total_coin = (
+                        get_available_sell_qty(self.driver)
+                        * self.cfg.sell_qty_ratio
+                        * (1 - self.cfg.anchor_order_budget_ratio)
+                    )
+                    used_coin = sum(r.qty for r in rows)
+                    coin = max(0, total_coin - used_coin)
+
+                    self.logger.info(
+                        f"{self.ticker} [COIN BUDGET] Total: {total_coin:.8f}, "
+                        f"Used: {used_coin:.8f}, Remaining: {coin:.8f}"
+                    )
+                else:
+                    coin = (
+                        get_available_sell_qty(self.driver)
+                        * self.cfg.sell_qty_ratio
+                        * (1 - self.cfg.anchor_order_budget_ratio)
+                    )
             except Exception as e:
                 self.logger.error(f"Failed to get coin balance: {e}")
                 return
 
-            weights = _weights_pyramid(len(prices))
+            # NEW: Use distribution mode from config
+            weights = _get_weights(len(prices), self.cfg.distribution_mode)
 
             for price, w in zip(prices, weights):
                 qty = _normalize_qty(coin * w)
@@ -538,7 +645,7 @@ class FollowMMEngine:
                 usdt_value = price * qty
                 self.logger.info(
                     f"{self.ticker} [LADDER] {self.side.upper()} "
-                    f"price={price:.3f} qty={qty:.8f} ≈{usdt_value:,.0f}usdt"
+                    f"price={price:.3f} qty={qty:.8f} ≈{usdt_value:,.0f}usdt ({self.cfg.distribution_mode})"
                 )
                 try:
                     place_limit_order(self.driver, "ask", price, qty)
@@ -594,8 +701,9 @@ class FollowMMEngine:
         return prices
 
 
-def run_follow_mm_bid(vic_url: str, ticker: str):
-    cfg = _build_cfg()
+# MODIFIED: Update function signatures to accept fixed_amount
+def run_follow_mm_bid(vic_url: str, ticker: str, fixed_amount: Optional[float] = None):
+    cfg = _build_cfg(fixed_amount=fixed_amount)
     driver = init_driver()
 
     try:
@@ -622,8 +730,8 @@ def run_follow_mm_bid(vic_url: str, ticker: str):
         print("[INFO] Driver shutdown complete.")
 
 
-def run_follow_mm_ask(vic_url: str, ticker: str):
-    cfg = _build_cfg()
+def run_follow_mm_ask(vic_url: str, ticker: str, fixed_amount: Optional[float] = None):
+    cfg = _build_cfg(fixed_amount=fixed_amount)
     driver = init_driver()
 
     try:
