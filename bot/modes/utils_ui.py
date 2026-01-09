@@ -21,6 +21,7 @@ def wait_for_manual_login(mode: int):
         2: "Print Binance-Referenced Price Mode Started",
         3: "Follow MM (BID)",
         4: "Follow MM (ASK)",
+        5: "Follow MM (BID & ASK)",
     }
 
     print("\n" + "=" * 45)

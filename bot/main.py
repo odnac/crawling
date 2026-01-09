@@ -4,6 +4,7 @@ from modes.security import check_password
 from modes.mode_orderbook import run_vic_orderbook_mode
 from modes.mode_print_referenced_price import print_binance_referenced_price_mode
 from modes.mm.mode_binance_follow import run_follow_mm_bid, run_follow_mm_ask
+from modes.mm.mode_binance_dual import run_dual_side_mm
 
 
 def _prompt_mode() -> str:
@@ -12,8 +13,9 @@ def _prompt_mode() -> str:
     print("2) Print Binance-Referenced Price")
     print("3) Run Follow Market Maker (Bid)")
     print("4) Run Follow Market Maker (Ask)")
+    print("5) Run Dual-Side Market Maker (Bid + Ask)")
     print("q) Quit")
-    return input("\n👉  Select (1/2/3/4/q): ").strip().lower()
+    return input("\n👉  Select (1/2/3/4/5/q): ").strip().lower()
 
 
 def _prompt_ticker() -> str:
@@ -79,6 +81,69 @@ def _prompt_fixed_amount() -> float:
             raise
 
 
+def _prompt_dual_side_amounts() -> tuple[float, float] | None:
+    """
+    Prompt user to input bid and ask amounts for dual-side market making.
+    Returns (bid_amount, ask_amount) tuple if confirmed, None if cancelled.
+    """
+    print("\n" + "=" * 60)
+    print("🔄 Dual-Side Market Making (BID + ASK)")
+    print("=" * 60)
+
+    # BID budget
+    print("\n[BID (Buy) Budget Setup]")
+    while True:
+        try:
+            bid_amount = float(input("👉 BID USDT amount: ").strip())
+            if bid_amount <= 0:
+                print("❌ Amount must be greater than 0. Please try again.")
+                continue
+            break
+        except ValueError:
+            print("❌ Invalid input. Please enter a valid number.")
+        except KeyboardInterrupt:
+            print("\n\n[!] Input cancelled by user.")
+            return None
+
+    # ASK budget
+    print("\n[ASK (Sell) Budget Setup]")
+    print("💡 Enter the USDT value of coins you want to use for selling")
+    while True:
+        try:
+            ask_amount = float(input("👉 ASK USDT value: ").strip())
+            if ask_amount <= 0:
+                print("❌ Amount must be greater than 0. Please try again.")
+                continue
+            break
+        except ValueError:
+            print("❌ Invalid input. Please enter a valid number.")
+        except KeyboardInterrupt:
+            print("\n\n[!] Input cancelled by user.")
+            return None
+
+    # Confirmation
+    total_budget = bid_amount + ask_amount
+    print("\n" + "=" * 60)
+    print(f"📊 Budget Summary")
+    print("=" * 60)
+    print(f"  BID (Buy) Budget:  {bid_amount:,.2f} USDT")
+    print(f"  ASK (Sell) Budget: {ask_amount:,.2f} USDT (coin value)")
+    print(f"  Total Budget:      {total_budget:,.2f} USDT")
+    print("=" * 60)
+
+    while True:
+        confirm = input("\nProceed? (y/n): ").strip().lower()
+        if confirm in ["y", "yes"]:
+            print("✅ Starting dual-side market making...")
+            print("=" * 60 + "\n")
+            return (bid_amount, ask_amount)
+        elif confirm in ["n", "no"]:
+            print("❌ Cancelled.\n")
+            return None
+        else:
+            print("❌ Please enter 'y' or 'n'.")
+
+
 def main():
     if not check_password():
         return
@@ -92,31 +157,27 @@ def main():
                 print_binance_referenced_price_mode(VIC_URL)
             elif mode == "3":
                 ticker = _prompt_ticker()
-
-                # Ask user about fixed amount mode
                 use_fixed = _prompt_use_fixed_amount()
                 fixed_amount = None
                 if use_fixed:
                     fixed_amount = _prompt_fixed_amount()
-
                 run_follow_mm_bid(VIC_URL, ticker, fixed_amount=fixed_amount)
             elif mode == "4":
                 ticker = _prompt_ticker()
-
-                # Ask user about fixed amount mode
                 use_fixed = _prompt_use_fixed_amount()
                 fixed_amount = None
                 if use_fixed:
                     fixed_amount = _prompt_fixed_amount()
-
                 run_follow_mm_ask(VIC_URL, ticker, fixed_amount=fixed_amount)
             elif mode == "5":
-                #
-                #
-                # TODO: ask, bid bot combine
-                #
-                #
-                pass
+                ticker = _prompt_ticker()
+                amounts = _prompt_dual_side_amounts()
+                if amounts is None:
+                    continue
+
+                bid_amount, ask_amount = amounts
+                run_dual_side_mm(VIC_URL, ticker, bid_amount, ask_amount)
+
             elif mode == "q":
                 print("Bye 👋...\n\n")
                 break
